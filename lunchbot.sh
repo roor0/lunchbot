@@ -12,7 +12,7 @@ else
 fi
 
 TOKEN="${LUNCHBOT_TOKEN:?Set LUNCHBOT_TOKEN in .env}"
-OFFICE_KEYBOARD="${LUNCHBOT_KEYBOARD:?Set LUNCHBOT_KEYBOARD in .env}"
+OFFICE_DEVICE="${LUNCHBOT_OFFICE_DEVICE:?Set LUNCHBOT_OFFICE_DEVICE in .env}"
 API_BASE="https://officelunch.app"
 API_URL="${API_BASE}/api/v1/opt-in"
 DASHBOARD_URL="${API_BASE}/dashboard"
@@ -35,9 +35,9 @@ wait_for_network() {
     return 1
 }
 
-# Check if the office Bluetooth keyboard is connected
+# Check if an office device (keyboard or mouse) is connected
 is_at_office() {
-    hidutil list 2>/dev/null | grep -q "$OFFICE_KEYBOARD"
+    hidutil list 2>/dev/null | grep -q "$OFFICE_DEVICE"
 }
 
 # POST /api/v1/opt-in — opt in for today
@@ -127,7 +127,7 @@ if ! wait_for_network; then
 fi
 
 if is_at_office; then
-    log "Office keyboard detected — auto opting in"
+    log "Office device detected — auto opting in"
 
     if do_opt_in; then
         sleep 1
@@ -143,7 +143,7 @@ if is_at_office; then
         show_failure
     fi
 else
-    log "Office keyboard not detected — prompting"
+    log "Office device not detected — prompting"
     CHOICE=$(prompt_user)
 
     if [ "$CHOICE" = "Yes" ]; then
