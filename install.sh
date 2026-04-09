@@ -144,6 +144,8 @@ setup_env() {
     cat > "$ENV_FILE" <<EOF
 LUNCHBOT_TOKEN="${token}"
 LUNCHBOT_OFFICE_DEVICE="${device}"
+# Schedule is baked into the LaunchAgent at install time.
+# To change when lunchbot runs, edit these values and re-run install.sh.
 LUNCHBOT_DAYS="${days}"
 LUNCHBOT_HOUR="${hour}"
 LUNCHBOT_MINUTE="${minute}"
