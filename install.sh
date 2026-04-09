@@ -8,6 +8,8 @@ ENV_FILE="${SCRIPT_DIR}/.env"
 PLIST_NAME="com.lunchbot.plist"
 PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_NAME"
 
+DAY_NAMES=(unused Monday Tuesday Wednesday Thursday Friday Saturday Sunday)
+
 # ── .env setup ──────────────────────────────────────────────
 
 setup_env() {
@@ -107,10 +109,41 @@ setup_env() {
         echo "This is OK if the device isn't connected right now."
     fi
 
+    # Schedule — read existing or generate defaults
+    local days="" hour="" minute=""
+    if [ -f "$ENV_FILE" ]; then
+        days=$(grep '^LUNCHBOT_DAYS=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        hour=$(grep '^LUNCHBOT_HOUR=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        minute=$(grep '^LUNCHBOT_MINUTE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    fi
+
+    # Default: Tue/Thu, random minute between 9:00–9:59
+    if [ -z "$days" ]; then
+        days="2,4"
+    fi
+    if [ -z "$hour" ] || [ -z "$minute" ]; then
+        hour="9"
+        minute=$((RANDOM % 60))
+    fi
+
+    # Format day names for display
+    local day_display=""
+    IFS=',' read -ra day_nums <<< "$days"
+    for d in "${day_nums[@]}"; do
+        if [ -n "$day_display" ]; then day_display+=", "; fi
+        day_display+="${DAY_NAMES[$d]}"
+    done
+
+    echo ""
+    echo "Schedule: ${day_display} at ${hour}:$(printf '%02d' "$minute")"
+
     # Write .env
     cat > "$ENV_FILE" <<EOF
 LUNCHBOT_TOKEN="${token}"
 LUNCHBOT_OFFICE_DEVICE="${device}"
+LUNCHBOT_DAYS="${days}"
+LUNCHBOT_HOUR="${hour}"
+LUNCHBOT_MINUTE="${minute}"
 EOF
     echo ""
     echo "Saved $ENV_FILE"
@@ -119,6 +152,27 @@ EOF
 # ── LaunchAgent install ─────────────────────────────────────
 
 install_launchagent() {
+    # Read schedule from .env
+    local days hour minute
+    days=$(grep '^LUNCHBOT_DAYS=' "$ENV_FILE" | cut -d= -f2- | tr -d '"')
+    hour=$(grep '^LUNCHBOT_HOUR=' "$ENV_FILE" | cut -d= -f2- | tr -d '"')
+    minute=$(grep '^LUNCHBOT_MINUTE=' "$ENV_FILE" | cut -d= -f2- | tr -d '"')
+
+    # Build calendar interval entries
+    local intervals=""
+    IFS=',' read -ra day_nums <<< "$days"
+    for d in "${day_nums[@]}"; do
+        intervals+="        <dict>
+            <key>Weekday</key>
+            <integer>${d}</integer>
+            <key>Hour</key>
+            <integer>${hour}</integer>
+            <key>Minute</key>
+            <integer>${minute}</integer>
+        </dict>
+"
+    done
+
     mkdir -p "$HOME/Library/LaunchAgents"
 
     cat > "$PLIST_DEST" <<EOF
@@ -135,23 +189,7 @@ install_launchagent() {
     </array>
     <key>StartCalendarInterval</key>
     <array>
-        <dict>
-            <key>Weekday</key>
-            <integer>2</integer>
-            <key>Hour</key>
-            <integer>9</integer>
-            <key>Minute</key>
-            <integer>20</integer>
-        </dict>
-        <dict>
-            <key>Weekday</key>
-            <integer>4</integer>
-            <key>Hour</key>
-            <integer>9</integer>
-            <key>Minute</key>
-            <integer>20</integer>
-        </dict>
-    </array>
+${intervals}    </array>
     <key>StandardOutPath</key>
     <string>${SCRIPT_DIR}/launchd-stdout.log</string>
     <key>StandardErrorPath</key>
@@ -164,8 +202,15 @@ EOF
     launchctl bootout "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true
     launchctl load "$PLIST_DEST"
 
+    # Format day names for display
+    local day_display=""
+    for d in "${day_nums[@]}"; do
+        if [ -n "$day_display" ]; then day_display+=", "; fi
+        day_display+="${DAY_NAMES[$d]}"
+    done
+
     echo "Installed LaunchAgent: $PLIST_DEST"
-    echo "Lunchbot will run at 9:20 AM on Tuesdays and Thursdays."
+    echo "Lunchbot will run at ${hour}:$(printf '%02d' "$minute") on ${day_display}."
 }
 
 # ── Main ────────────────────────────────────────────────────
