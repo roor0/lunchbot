@@ -25,7 +25,10 @@ setup_env() {
     if [ -n "$token" ] && [ "$token" != "olm_your_token_here" ]; then
         echo "API token: already configured"
     else
-        echo "Enter your officelunch.app API token:"
+        echo "Enter your officelunch.app API token."
+        echo "Create one at: https://officelunch.app/tokens"
+        echo ""
+        echo "Token:"
         read -r token
         if [ -z "$token" ]; then
             echo "Error: token is required." >&2
