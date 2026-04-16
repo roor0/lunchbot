@@ -82,37 +82,38 @@ verify_status() {
     return 1
 }
 
+notify() {
+    osascript -e "display notification \"$1\" with title \"Lunchbot\" sound name \"Glass\"" >/dev/null 2>&1
+}
+
 show_success() {
+    notify "You're in for lunch today!"
     osascript <<'EOF'
-tell application "System Events"
-    activate
-    display dialog "You're in for lunch today!" buttons {"OK"} default button "OK" with title "Lunchbot" with icon note
-end tell
+activate
+display dialog "You're in for lunch today!" buttons {"OK"} default button "OK" with title "Lunchbot" with icon note
 EOF
 }
 
 show_failure() {
+    notify "Failed to opt in for lunch"
     local btn
     btn=$(osascript <<'EOF'
-tell application "System Events"
-    activate
-    button returned of (display dialog "Failed to opt in for lunch.
+activate
+button returned of (display dialog "Failed to opt in for lunch.
 
 Click below to opt in manually:" buttons {"Dismiss", "Open Dashboard"} default button "Open Dashboard" with title "Lunchbot" with icon caution)
-end tell
 EOF
     )
     [ "$btn" = "Open Dashboard" ] && open "https://officelunch.app/dashboard"
 }
 
 prompt_user() {
+    notify "Opt in for lunch today?"
     osascript <<'EOF'
-tell application "System Events"
-    activate
-    button returned of (display dialog "You're not at the office.
+activate
+button returned of (display dialog "You're not at the office.
 
 Would you like to opt in for lunch today?" buttons {"No", "Yes"} default button "Yes" with title "Lunchbot" with icon note)
-end tell
 EOF
 }
 
@@ -120,10 +121,24 @@ EOF
 
 log "=== Lunchbot starting ==="
 
+# Only run on Tue (2) / Thu (4). Guards RunAtLoad triggers on other days.
+DOW=$(date +%u)
+if [ "$DOW" != "2" ] && [ "$DOW" != "4" ]; then
+    log "Not a lunch day (dow=$DOW) — exiting"
+    exit 0
+fi
+
 if ! wait_for_network; then
     log "No network after 60s, showing failure"
     show_failure
     exit 1
+fi
+
+# If already opted in today, silently no-op. Prevents re-prompting after a
+# successful run earlier the same day (e.g. catch-up after power-on).
+if verify_status; then
+    log "Already opted in today — exiting"
+    exit 0
 fi
 
 if is_at_office; then
