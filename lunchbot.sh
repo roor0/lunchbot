@@ -82,26 +82,28 @@ verify_status() {
     return 1
 }
 
+ICON_PATH="${SCRIPT_DIR}/icon.png"
+
 notify() {
     osascript -e "display notification \"$1\" with title \"Lunchbot\" sound name \"Glass\"" >/dev/null 2>&1
 }
 
 show_success() {
     notify "You're in for lunch today!"
-    osascript <<'EOF'
+    osascript <<EOF
 activate
-display dialog "You're in for lunch today!" buttons {"OK"} default button "OK" with title "Lunchbot" with icon note
+display dialog "You're in for lunch today!" buttons {"OK"} default button "OK" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}")
 EOF
 }
 
 show_failure() {
     notify "Failed to opt in for lunch"
     local btn
-    btn=$(osascript <<'EOF'
+    btn=$(osascript <<EOF
 activate
 button returned of (display dialog "Failed to opt in for lunch.
 
-Click below to opt in manually:" buttons {"Dismiss", "Open Dashboard"} default button "Open Dashboard" with title "Lunchbot" with icon caution)
+Click below to opt in manually:" buttons {"Dismiss", "Open Dashboard"} default button "Open Dashboard" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}"))
 EOF
     )
     [ "$btn" = "Open Dashboard" ] && open "https://officelunch.app/dashboard"
@@ -109,11 +111,11 @@ EOF
 
 prompt_user() {
     notify "Opt in for lunch today?"
-    osascript <<'EOF'
+    osascript <<EOF
 activate
 button returned of (display dialog "You're not at the office.
 
-Would you like to opt in for lunch today?" buttons {"No", "Yes"} default button "Yes" with title "Lunchbot" with icon note)
+Would you like to opt in for lunch today?" buttons {"No", "Yes"} default button "Yes" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}"))
 EOF
 }
 
