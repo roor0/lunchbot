@@ -187,6 +187,8 @@ install_launchagent() {
 <dict>
     <key>Label</key>
     <string>com.lunchbot</string>
+    <key>RunAtLoad</key>
+    <true/>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
