@@ -14,7 +14,7 @@ Run the install script — it walks you through everything:
 
 It will:
 1. Prompt for your officelunch.app API token
-2. Walk you through each currently-connected Bluetooth device and external monitor, asking y/N for each — "yes" marks it as an office signal
+2. List every currently-connected piece of hardware (Bluetooth devices and external monitors) and ask y/N for each — "yes" marks it as office hardware
 3. Save your selections to `.env`
 4. Install and load a LaunchAgent to run on your configured days (defaults to Tue/Thu at a random minute in the 9 AM hour)
 

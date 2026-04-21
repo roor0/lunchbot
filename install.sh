@@ -36,11 +36,11 @@ setup_env() {
         fi
     fi
 
-    # Office presence selection — y/N per currently-connected BT device / monitor
+    # Office hardware selection — one unified y/N list
     echo ""
-    echo "--- Office presence detection ---"
-    echo "Lunchbot auto opts-in when any selected device/monitor is connected."
-    echo "Review each item below. Press Enter to accept the default in brackets."
+    echo "--- Office hardware ---"
+    echo "Lunchbot auto opts-in when any selected item is connected."
+    echo "Review each currently-connected item below (Enter accepts the default)."
     echo ""
 
     # Load existing selections (pipe-separated)
@@ -57,9 +57,15 @@ setup_env() {
         IFS='|' read -r -a existing_monitors <<< "$existing_monitors_raw"
     fi
 
-    # Currently connected Bluetooth devices
-    local bt_connected
-    bt_connected=$(system_profiler SPBluetoothDataType 2>/dev/null | awk '
+    # Build a unified candidate list. Each line: "TYPE<TAB>IDENT<TAB>LABEL"
+    # TYPE is "bt" or "mon". IDENT is what we match at runtime.
+    local candidates=""
+
+    local bt_line
+    while IFS= read -r bt_line; do
+        [ -z "$bt_line" ] && continue
+        candidates+=$'bt\t'"${bt_line}"$'\t'"${bt_line} (Bluetooth)"$'\n'
+    done < <(system_profiler SPBluetoothDataType 2>/dev/null | awk '
         /^      Connected:/ { c=1; next }
         /^      Not Connected:/ { c=0; next }
         /^    [^ ]/ { c=0 }
@@ -68,9 +74,18 @@ setup_env() {
         }
     ')
 
-    # Currently connected external monitors, as "ProductName:SerialNumber"
-    local monitors_connected
-    monitors_connected=$(ioreg -lw0 2>/dev/null | perl -ne '
+    local mon_line
+    while IFS= read -r mon_line; do
+        [ -z "$mon_line" ] && continue
+        local mname="${mon_line%:*}" mserial="${mon_line##*:}"
+        local mlabel
+        if [ -n "$mserial" ]; then
+            mlabel="${mname} (Monitor, S/N ${mserial})"
+        else
+            mlabel="${mname} (Monitor, no serial — won't distinguish from same model elsewhere)"
+        fi
+        candidates+=$'mon\t'"${mon_line}"$'\t'"${mlabel}"$'\n'
+    done < <(ioreg -lw0 2>/dev/null | perl -ne '
         next unless /"DisplayAttributes"\s*=/;
         my ($name) = /"ProductName"="([^"]*)"/;
         my ($serial) = /"AlphanumericSerialNumber"="([^"]*)"/;
@@ -98,40 +113,28 @@ setup_env() {
         fi
     }
 
-    if [ -n "$bt_connected" ]; then
-        echo "Bluetooth devices connected right now:"
-        while IFS= read -r name; do
-            [ -z "$name" ] && continue
-            local d_default=0
-            _contains "$name" "${existing_devices[@]}" && d_default=1
-            if _ask "\"$name\" — office device?" "$d_default"; then
-                selected_devices+=("$name")
-            fi
-        done <<< "$bt_connected"
-        echo ""
-    fi
-
-    if [ -n "$monitors_connected" ]; then
-        echo "External monitors connected right now:"
-        while IFS= read -r entry; do
-            [ -z "$entry" ] && continue
-            local mname="${entry%:*}" mserial="${entry##*:}"
-            local m_default=0
-            _contains "$entry" "${existing_monitors[@]}" && m_default=1
-            local label
-            if [ -n "$mserial" ]; then
-                label="\"$mname\" (S/N $mserial) — office monitor?"
+    if [ -n "$candidates" ]; then
+        echo "Currently connected:"
+        local line type ident label default_yes
+        # Read candidates on FD 3 so _ask's `read` still consumes from stdin (user input)
+        while IFS=$'\t' read -r type ident label <&3; do
+            [ -z "$type" ] && continue
+            default_yes=0
+            if [ "$type" = "bt" ]; then
+                _contains "$ident" "${existing_devices[@]}" && default_yes=1
             else
-                label="\"$mname\" (no serial; won't distinguish from same model elsewhere) — office monitor?"
+                _contains "$ident" "${existing_monitors[@]}" && default_yes=1
             fi
-            if _ask "$label" "$m_default"; then
-                selected_monitors+=("$entry")
+            if _ask "${label} — office hardware?" "$default_yes"; then
+                if [ "$type" = "bt" ]; then
+                    selected_devices+=("$ident")
+                else
+                    selected_monitors+=("$ident")
+                fi
             fi
-        done <<< "$monitors_connected"
+        done 3<<< "$candidates"
         echo ""
-    fi
-
-    if [ -z "$bt_connected" ] && [ -z "$monitors_connected" ]; then
+    else
         echo "No Bluetooth devices or external monitors connected right now."
         echo "Run install.sh again at the office to configure new signals."
         echo ""
@@ -141,20 +144,20 @@ setup_env() {
     local existing
     for existing in "${existing_devices[@]}"; do
         [ -z "$existing" ] && continue
-        if ! printf '%s\n' "$bt_connected" | grep -Fqx -- "$existing"; then
+        if ! printf '%s' "$candidates" | awk -F'\t' -v e="$existing" '$1=="bt" && $2==e { found=1 } END { exit !found }'; then
             selected_devices+=("$existing")
         fi
     done
     for existing in "${existing_monitors[@]}"; do
         [ -z "$existing" ] && continue
-        if ! printf '%s\n' "$monitors_connected" | grep -Fqx -- "$existing"; then
+        if ! printf '%s' "$candidates" | awk -F'\t' -v e="$existing" '$1=="mon" && $2==e { found=1 } END { exit !found }'; then
             selected_monitors+=("$existing")
         fi
     done
 
     # Summary
     if [ ${#selected_devices[@]} -gt 0 ] || [ ${#selected_monitors[@]} -gt 0 ]; then
-        echo "Configured office signals:"
+        echo "Configured office hardware:"
         local d m
         for d in "${selected_devices[@]}"; do echo "  ✓ $d (Bluetooth)"; done
         for m in "${selected_monitors[@]}"; do
@@ -163,7 +166,7 @@ setup_env() {
             else echo "  ✓ $n (Monitor, no serial)"; fi
         done
     else
-        echo "No office signals selected — lunchbot will prompt you on each scheduled day."
+        echo "No office hardware selected — lunchbot will prompt you on each scheduled day."
     fi
 
     # Join with pipe separator for .env
