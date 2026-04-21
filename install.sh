@@ -114,7 +114,24 @@ setup_env() {
     }
 
     if [ -n "$candidates" ]; then
-        echo "Currently connected:"
+        # Show the full list up front so the user knows what's about to be prompted.
+        local total=0 _t _id _lbl
+        while IFS=$'\t' read -r _t _id _lbl; do
+            [ -z "$_t" ] && continue
+            total=$((total + 1))
+        done <<< "$candidates"
+
+        echo "Detected ${total} connected item(s):"
+        local _i=0
+        while IFS=$'\t' read -r _t _id _lbl; do
+            [ -z "$_t" ] && continue
+            _i=$((_i + 1))
+            printf "  %d. %s\n" "$_i" "$_lbl"
+        done <<< "$candidates"
+        echo ""
+        echo "You'll be asked about each one. Enter accepts the default (capitalized letter)."
+        echo ""
+
         local line type ident label default_yes
         # Read candidates on FD 3 so _ask's `read` still consumes from stdin (user input)
         while IFS=$'\t' read -r type ident label <&3; do
