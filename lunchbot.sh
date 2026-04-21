@@ -12,7 +12,8 @@ else
 fi
 
 TOKEN="${LUNCHBOT_TOKEN:?Set LUNCHBOT_TOKEN in .env}"
-OFFICE_DEVICE="${LUNCHBOT_OFFICE_DEVICE:?Set LUNCHBOT_OFFICE_DEVICE in .env}"
+OFFICE_DEVICE="${LUNCHBOT_OFFICE_DEVICE:-}"
+OFFICE_MONITOR="${LUNCHBOT_OFFICE_MONITOR:-}"
 API_BASE="https://officelunch.app"
 API_URL="${API_BASE}/api/v1/opt-in"
 DASHBOARD_URL="${API_BASE}/dashboard"
@@ -35,9 +36,15 @@ wait_for_network() {
     return 1
 }
 
-# Check if an office device (keyboard or mouse) is connected
+# Check if a configured office device (Bluetooth) or monitor is present
 is_at_office() {
-    hidutil list 2>/dev/null | grep -q "$OFFICE_DEVICE"
+    if [ -n "$OFFICE_DEVICE" ] && hidutil list 2>/dev/null | grep -q "$OFFICE_DEVICE"; then
+        return 0
+    fi
+    if [ -n "$OFFICE_MONITOR" ] && system_profiler SPDisplaysDataType 2>/dev/null | grep -q "$OFFICE_MONITOR"; then
+        return 0
+    fi
+    return 1
 }
 
 # POST /api/v1/opt-in — opt in for today
@@ -144,7 +151,7 @@ if verify_status; then
 fi
 
 if is_at_office; then
-    log "Office device detected — auto opting in"
+    log "Office signal detected — auto opting in"
 
     if do_opt_in; then
         sleep 1
@@ -160,7 +167,7 @@ if is_at_office; then
         show_failure
     fi
 else
-    log "Office device not detected — prompting"
+    log "No office signal detected — prompting"
     CHOICE=$(prompt_user)
 
     if [ "$CHOICE" = "Yes" ]; then

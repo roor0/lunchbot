@@ -36,8 +36,9 @@ setup_env() {
         fi
     fi
 
-    # Office device
+    # Office Bluetooth device (optional)
     echo ""
+    echo "--- Bluetooth device detection (optional) ---"
     echo "Paired Bluetooth devices:"
     echo ""
 
@@ -73,7 +74,8 @@ setup_env() {
     done <<< "$devices"
 
     echo ""
-    echo "Enter a search string that matches your office device(s)."
+    echo "Enter a search string that matches your office Bluetooth device(s),"
+    echo "or leave blank to skip Bluetooth detection."
     echo "Tip: use a substring common to multiple devices, e.g. \"Blackthorn Magic\""
     echo "     to match both a keyboard and mouse."
     echo ""
@@ -86,30 +88,104 @@ setup_env() {
         local matches
         matches=$(echo "$devices" | grep -c "$device" || true)
         echo "Current match string: \"$device\" ($matches device(s) matched)"
-        echo "Press Enter to keep, or type a new string:"
+        echo "Press Enter to keep, or type a new string (or \"none\" to clear):"
     else
-        echo "Match string:"
+        echo "Match string (blank to skip):"
     fi
     read -r new_device
-    if [ -n "$new_device" ]; then
+    if [ "$new_device" = "none" ]; then
+        device=""
+    elif [ -n "$new_device" ]; then
         device="$new_device"
     fi
-    if [ -z "$device" ]; then
-        echo "Error: device match string is required." >&2
-        exit 1
+
+    if [ -n "$device" ]; then
+        local matches
+        matches=$(echo "$devices" | grep "$device" || true)
+        if [ -n "$matches" ]; then
+            echo ""
+            echo "Matched devices:"
+            echo "$matches" | sed 's/^/  ✓ /'
+        else
+            echo ""
+            echo "Warning: no currently visible devices match \"$device\"."
+            echo "This is OK if the device isn't connected right now."
+        fi
     fi
 
-    # Show what will match
-    local matches
-    matches=$(echo "$devices" | grep "$device" || true)
-    if [ -n "$matches" ]; then
-        echo ""
-        echo "Matched devices:"
-        echo "$matches" | sed 's/^/  ✓ /'
+    # Office monitor (optional) — useful for coworkers without paired BT devices
+    echo ""
+    echo "--- Monitor detection (optional) ---"
+    echo "External displays currently connected:"
+    echo ""
+
+    local monitors
+    monitors=$(system_profiler SPDisplaysDataType 2>/dev/null | awk '
+        /^        [A-Za-z0-9].*:$/ {
+            if (prev_name != "") print prev_name (prev_internal ? " [built-in]" : "")
+            prev_name=$0; gsub(/^ +/,"",prev_name); gsub(/:$/,"",prev_name)
+            prev_internal=0
+            next
+        }
+        /Connection Type: Internal/ { prev_internal=1 }
+        END {
+            if (prev_name != "") print prev_name (prev_internal ? " [built-in]" : "")
+        }
+    ')
+
+    local external_monitors
+    external_monitors=$(echo "$monitors" | grep -v '\[built-in\]' || true)
+    if [ -n "$external_monitors" ]; then
+        local j=1
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            printf "  %2d) %s\n" "$j" "$line"
+            j=$((j + 1))
+        done <<< "$external_monitors"
     else
+        echo "  (none detected — plug in your office monitor before running this"
+        echo "   if you want to configure it now)"
+    fi
+
+    echo ""
+    echo "Enter a search string that matches your office monitor,"
+    echo "or leave blank to skip monitor detection."
+    echo ""
+
+    local monitor=""
+    if [ -f "$ENV_FILE" ]; then
+        monitor=$(grep '^LUNCHBOT_OFFICE_MONITOR=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    fi
+    if [ -n "$monitor" ]; then
+        echo "Current match string: \"$monitor\""
+        echo "Press Enter to keep, or type a new string (or \"none\" to clear):"
+    else
+        echo "Match string (blank to skip):"
+    fi
+    read -r new_monitor
+    if [ "$new_monitor" = "none" ]; then
+        monitor=""
+    elif [ -n "$new_monitor" ]; then
+        monitor="$new_monitor"
+    fi
+
+    if [ -n "$monitor" ]; then
+        local mon_matches
+        mon_matches=$(echo "$monitors" | grep "$monitor" || true)
+        if [ -n "$mon_matches" ]; then
+            echo ""
+            echo "Matched monitors:"
+            echo "$mon_matches" | sed 's/^/  ✓ /'
+        else
+            echo ""
+            echo "Warning: no currently visible displays match \"$monitor\"."
+            echo "This is OK if the monitor isn't plugged in right now."
+        fi
+    fi
+
+    if [ -z "$device" ] && [ -z "$monitor" ]; then
         echo ""
-        echo "Warning: no currently visible devices match \"$device\"."
-        echo "This is OK if the device isn't connected right now."
+        echo "No detection signals configured — lunchbot will prompt you on each scheduled day."
     fi
 
     # Schedule — read existing or generate defaults
@@ -143,7 +219,10 @@ setup_env() {
     # Write .env
     cat > "$ENV_FILE" <<EOF
 LUNCHBOT_TOKEN="${token}"
+# Office presence detection — match either Bluetooth device(s) or a monitor.
+# At least one must be set; leave the other blank to disable that signal.
 LUNCHBOT_OFFICE_DEVICE="${device}"
+LUNCHBOT_OFFICE_MONITOR="${monitor}"
 # Schedule is baked into the LaunchAgent at install time.
 # To change when lunchbot runs, edit these values and re-run install.sh.
 LUNCHBOT_DAYS="${days}"
