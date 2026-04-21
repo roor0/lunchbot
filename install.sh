@@ -274,9 +274,12 @@ ${intervals}    </array>
 </plist>
 EOF
 
-    # Load the agent (unload first if already loaded)
-    launchctl bootout "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true
-    launchctl load "$PLIST_DEST"
+    # Reload the agent via the modern bootstrap API. bootout takes the service
+    # label (no .plist), not the plist filename.
+    local service_label="${PLIST_NAME%.plist}"
+    local domain="gui/$(id -u)"
+    launchctl bootout "${domain}/${service_label}" 2>/dev/null || true
+    launchctl bootstrap "$domain" "$PLIST_DEST"
 
     # Format day names for display
     local day_display=""
