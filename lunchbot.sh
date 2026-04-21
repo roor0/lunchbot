@@ -12,8 +12,8 @@ else
 fi
 
 TOKEN="${LUNCHBOT_TOKEN:?Set LUNCHBOT_TOKEN in .env}"
-OFFICE_DEVICE="${LUNCHBOT_OFFICE_DEVICE:-}"
-OFFICE_MONITOR="${LUNCHBOT_OFFICE_MONITOR:-}"
+OFFICE_DEVICES="${LUNCHBOT_OFFICE_DEVICES:-}"
+OFFICE_MONITORS="${LUNCHBOT_OFFICE_MONITORS:-}"
 API_BASE="https://officelunch.app"
 API_URL="${API_BASE}/api/v1/opt-in"
 DASHBOARD_URL="${API_BASE}/dashboard"
@@ -36,14 +36,45 @@ wait_for_network() {
     return 1
 }
 
-# Check if a configured office device (Bluetooth) or monitor is present
+# Check if any configured Bluetooth device or monitor is currently connected
 is_at_office() {
-    if [ -n "$OFFICE_DEVICE" ] && hidutil list 2>/dev/null | grep -q "$OFFICE_DEVICE"; then
-        return 0
+    if [ -n "$OFFICE_DEVICES" ]; then
+        local bt_now
+        bt_now=$(system_profiler SPBluetoothDataType 2>/dev/null | awk '
+            /^      Connected:/ { c=1; next }
+            /^      Not Connected:/ { c=0; next }
+            /^    [^ ]/ { c=0 }
+            /^          [A-Za-z].*:$/ && c {
+                name=$0; gsub(/^ +/,"",name); gsub(/:$/,"",name); print name
+            }
+        ')
+        local IFS='|' name
+        for name in $OFFICE_DEVICES; do
+            [ -z "$name" ] && continue
+            if printf '%s\n' "$bt_now" | grep -Fqx -- "$name"; then
+                return 0
+            fi
+        done
     fi
-    if [ -n "$OFFICE_MONITOR" ] && system_profiler SPDisplaysDataType 2>/dev/null | grep -q "$OFFICE_MONITOR"; then
-        return 0
+
+    if [ -n "$OFFICE_MONITORS" ]; then
+        local mon_now
+        mon_now=$(ioreg -lw0 2>/dev/null | perl -ne '
+            next unless /"DisplayAttributes"\s*=/;
+            my ($name) = /"ProductName"="([^"]*)"/;
+            my ($serial) = /"AlphanumericSerialNumber"="([^"]*)"/;
+            next unless defined $name && length $name;
+            print "$name:$serial\n";
+        ')
+        local IFS='|' entry
+        for entry in $OFFICE_MONITORS; do
+            [ -z "$entry" ] && continue
+            if printf '%s\n' "$mon_now" | grep -Fqx -- "$entry"; then
+                return 0
+            fi
+        done
     fi
+
     return 1
 }
 

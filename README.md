@@ -14,10 +14,11 @@ Run the install script — it walks you through everything:
 
 It will:
 1. Prompt for your officelunch.app API token
-2. List your paired Bluetooth devices so you can pick a match string for office detection (e.g. `"Blackthorn Magic"` matches both a keyboard and mouse) — optional
-3. List connected external monitors so you can pick one as a fallback signal — optional
-4. Save your config to `.env`
-5. Install and load a LaunchAgent to run on your configured days (defaults to Tue/Thu at a random minute in the 9 AM hour)
+2. Walk you through each currently-connected Bluetooth device and external monitor, asking y/N for each — "yes" marks it as an office signal
+3. Save your selections to `.env`
+4. Install and load a LaunchAgent to run on your configured days (defaults to Tue/Thu at a random minute in the 9 AM hour)
+
+Monitors are identified by model + serial number, so a same-model monitor at home won't trigger detection. Bluetooth devices are matched by exact name. Re-run `install.sh` at the office to add or revise signals; items not currently connected are preserved across runs.
 
 To run manually any time:
 
@@ -28,7 +29,7 @@ bash lunchbot.sh
 ## How it works
 
 1. Waits for network connectivity (handles laptop wake-from-sleep)
-2. Checks for a configured office Bluetooth device (`hidutil list`) and/or external monitor (`system_profiler SPDisplaysDataType`)
-3. If at the office: auto opts in via the officelunch.app API, verifies, and shows a confirmation dialog
-4. If not at the office (or no signals are configured): prompts you with a Yes/No dialog
+2. Reads currently-connected Bluetooth devices (`system_profiler SPBluetoothDataType`) and displays (`ioreg`), comparing against the lists saved in `.env`
+3. If any configured signal matches: auto opts in via the officelunch.app API, verifies, and shows a confirmation dialog
+4. If nothing matches (or no signals are configured): prompts you with a Yes/No dialog
 5. Logs everything to `lunchbot.log`
