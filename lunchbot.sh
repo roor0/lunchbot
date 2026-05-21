@@ -41,14 +41,17 @@ update_self() {
     fi
 }
 
-# True if install.sh has changed since the last recorded install. The installer
-# writes HEAD to .installed-at-sha; we diff that range for install.sh edits.
+# True if install.sh has changed since the last recorded install, OR if no
+# install has been recorded yet (pre-tracking install, or never installed).
+# The installer writes HEAD to .installed-at-sha after a successful run.
 needs_reinstall() {
     local sha_file="${SCRIPT_DIR}/.installed-at-sha"
-    [ -f "$sha_file" ] || return 1
+    if [ ! -f "$sha_file" ]; then
+        return 0
+    fi
     local installed_sha
     installed_sha=$(cat "$sha_file" 2>/dev/null)
-    [ -n "$installed_sha" ] || return 1
+    [ -n "$installed_sha" ] || return 0
     git -C "$SCRIPT_DIR" diff --name-only "$installed_sha" HEAD 2>/dev/null \
         | grep -qx 'install.sh'
 }
