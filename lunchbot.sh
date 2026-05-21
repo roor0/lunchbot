@@ -155,12 +155,7 @@ verify_status() {
 
 ICON_PATH="${SCRIPT_DIR}/icon.png"
 
-notify() {
-    osascript -e "display notification \"$1\" with title \"Lunchbot\" sound name \"Glass\"" >/dev/null 2>&1
-}
-
 show_success() {
-    notify "You're in for lunch today!"
     osascript <<EOF
 activate
 display dialog "You're in for lunch today!" buttons {"OK"} default button "OK" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}")
@@ -168,7 +163,6 @@ EOF
 }
 
 show_already_opted_in() {
-    notify "You're still in for lunch today"
     osascript <<EOF
 activate
 display dialog "You were previously opted in and are still opted in for lunch today." buttons {"OK"} default button "OK" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}")
@@ -176,7 +170,6 @@ EOF
 }
 
 show_failure() {
-    notify "Failed to opt in for lunch"
     local btn
     btn=$(osascript <<EOF
 activate
@@ -189,7 +182,6 @@ EOF
 }
 
 prompt_user() {
-    notify "Opt in for lunch today?"
     osascript <<EOF
 activate
 button returned of (display dialog "You're not at the office.
@@ -199,7 +191,6 @@ EOF
 }
 
 prompt_reinstall() {
-    notify "Lunchbot installer update available"
     local btn
     btn=$(osascript <<EOF
 activate
