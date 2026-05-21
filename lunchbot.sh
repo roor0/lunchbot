@@ -134,6 +134,14 @@ display dialog "You're in for lunch today!" buttons {"OK"} default button "OK" w
 EOF
 }
 
+show_already_opted_in() {
+    notify "You're already in for lunch today"
+    osascript <<EOF
+activate
+display dialog "You were already opted in for lunch today." buttons {"OK"} default button "OK" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}")
+EOF
+}
+
 show_failure() {
     notify "Failed to opt in for lunch"
     local btn
@@ -174,10 +182,9 @@ if ! wait_for_network; then
     exit 1
 fi
 
-# If already opted in today, silently no-op. Prevents re-prompting after a
-# successful run earlier the same day (e.g. catch-up after power-on).
 if verify_status; then
-    log "Already opted in today — exiting"
+    log "Already opted in today — notifying user"
+    show_already_opted_in
     exit 0
 fi
 
