@@ -305,6 +305,12 @@ EOF
         day_display+="${DAY_NAMES[$d]}"
     done
 
+    # Record the commit we installed from so lunchbot.sh can detect when
+    # install.sh changes upstream and prompt the user to re-run the installer.
+    if git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        git -C "$SCRIPT_DIR" rev-parse HEAD > "${SCRIPT_DIR}/.installed-at-sha" 2>/dev/null || true
+    fi
+
     echo "Installed LaunchAgent: $PLIST_DEST"
     echo "Lunchbot will run at ${hour}:$(printf '%02d' "$minute") on ${day_display}."
 }

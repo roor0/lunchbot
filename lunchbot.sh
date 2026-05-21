@@ -23,6 +23,36 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
 }
 
+# Pull latest from origin. Skips if not a git repo, offline, or local changes
+# would block a fast-forward — always non-fatal.
+update_self() {
+    if ! git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        return
+    fi
+    local before after
+    before=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null)
+    if ! git -C "$SCRIPT_DIR" pull --ff-only --quiet 2>>"$LOG_FILE"; then
+        log "Self-update skipped (pull failed — local changes or conflict)"
+        return
+    fi
+    after=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null)
+    if [ "$before" != "$after" ]; then
+        log "Self-updated: ${before:0:7} → ${after:0:7}"
+    fi
+}
+
+# True if install.sh has changed since the last recorded install. The installer
+# writes HEAD to .installed-at-sha; we diff that range for install.sh edits.
+needs_reinstall() {
+    local sha_file="${SCRIPT_DIR}/.installed-at-sha"
+    [ -f "$sha_file" ] || return 1
+    local installed_sha
+    installed_sha=$(cat "$sha_file" 2>/dev/null)
+    [ -n "$installed_sha" ] || return 1
+    git -C "$SCRIPT_DIR" diff --name-only "$installed_sha" HEAD 2>/dev/null \
+        | grep -qx 'install.sh'
+}
+
 # Laptop may have just woken — wait for network connectivity
 wait_for_network() {
     local attempts=0
@@ -165,6 +195,26 @@ Would you like to opt in for lunch today?" buttons {"No", "Yes"} default button 
 EOF
 }
 
+prompt_reinstall() {
+    notify "Lunchbot installer update available"
+    local btn
+    btn=$(osascript <<EOF
+activate
+button returned of (display dialog "Lunchbot was updated and the installer has changed.
+
+Re-run the installer to apply LaunchAgent updates (schedule, plist format, etc)." buttons {"Later", "Run Installer"} default button "Run Installer" with title "Lunchbot Update" with icon (POSIX file "${ICON_PATH}"))
+EOF
+    )
+    if [ "$btn" = "Run Installer" ]; then
+        log "User chose to re-run installer"
+        osascript \
+            -e "tell application \"Terminal\" to do script \"cd '${SCRIPT_DIR}' && bash install.sh\"" \
+            -e 'tell application "Terminal" to activate' >/dev/null 2>&1
+    else
+        log "User dismissed reinstall prompt"
+    fi
+}
+
 # --- Main ---
 
 log "=== Lunchbot starting ==="
@@ -182,9 +232,12 @@ if ! wait_for_network; then
     exit 1
 fi
 
+update_self
+
 if verify_status; then
     log "Already opted in today — notifying user"
     show_already_opted_in
+    needs_reinstall && prompt_reinstall
     exit 0
 fi
 
@@ -219,5 +272,7 @@ else
         log "User declined"
     fi
 fi
+
+needs_reinstall && prompt_reinstall
 
 log "=== Lunchbot finished ==="
