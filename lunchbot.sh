@@ -168,10 +168,10 @@ EOF
 }
 
 show_already_opted_in() {
-    notify "You're already in for lunch today"
+    notify "You're still in for lunch today"
     osascript <<EOF
 activate
-display dialog "You were already opted in for lunch today." buttons {"OK"} default button "OK" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}")
+display dialog "You were previously opted in and are still opted in for lunch today." buttons {"OK"} default button "OK" with title "Lunchbot" with icon (POSIX file "${ICON_PATH}")
 EOF
 }
 
