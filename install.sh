@@ -295,6 +295,16 @@ EOF
     # label (no .plist), not the plist filename.
     local service_label="${PLIST_NAME%.plist}"
     local domain="gui/$(id -u)"
+
+    # Remove any legacy hand-installed agent. Early installs used the label
+    # com.roborton.lunchbot; leaving it loaded makes lunchbot fire twice on
+    # every lunch day (double dialogs, and concurrent git pulls corrupt
+    # FETCH_HEAD so self-update fails). Boot it out and delete its plist.
+    if [ "$service_label" != "com.roborton.lunchbot" ]; then
+        launchctl bootout "${domain}/com.roborton.lunchbot" 2>/dev/null || true
+        rm -f "$HOME/Library/LaunchAgents/com.roborton.lunchbot.plist"
+    fi
+
     launchctl bootout "${domain}/${service_label}" 2>/dev/null || true
     launchctl bootstrap "$domain" "$PLIST_DEST"
 
